@@ -68,24 +68,46 @@ def download(url):
     
 def create_slides(input_dir, output_dir, duration, framerate=1):
     doc = ET.parse(os.path.join(input_dir, 'shapes.svg'))
-    if os.path.exists(output_dir):
-        for f in os.listdir(output_dir):
-            os.remove(os.path.join(output_dir, f))
+    # if os.path.exists(output_dir):
+    #     for f in os.listdir(output_dir):
+    #         path = os.path.join(output_dir, f)
+    #         if os.path.isdir(path): 
+    #              shutil.rmtree(path)
+    #         else:
+    #             os.remove(path)
 
     os.makedirs(output_dir, exist_ok=True)
     for img in doc.iterfind('./{http://www.w3.org/2000/svg}image'):
         path = img.get('{http://www.w3.org/1999/xlink}href')
         # If this is a "deskshare" slide, don't show anything
-        if path.endswith('/deskshare.png'):
-            continue
-
         start = round(float(img.get('in'))*framerate)
         end = round(float(img.get('out'))*framerate)
+        if path.endswith('/deskshare.png'):
+            create_slides_from_deskshare(os.path.join(input_dir, 'deskshare/deskshare.webm'), output_dir, round(float(img.get('in'))), round(float(img.get('out'))), framerate)
+            continue
+        print(start, end)
+
         if start >= duration: continue
         end = min(end, ceil(duration))
 
         for t in range(start, end):
             shutil.copy(os.path.join(input_dir, path), os.path.join(output_dir, f"image{t}.png"))
+
+def create_slides_from_deskshare(deskshare_filename, slides_dir, start, end, framerate):
+    command = f"ffmpeg -ss {start} -i {deskshare_filename} -to {end} -copyts -vf fps={framerate} {slides_dir}/tmp/image%07d.png"
+    print(command)
+    tmp_dir = os.path.join(slides_dir, 'tmp')
+    if os.path.exists(tmp_dir): shutil.rmtree(tmp_dir)
+    os.makedirs(tmp_dir, exist_ok=True)
+
+    subprocess.run(command, shell=True)
+    files = sorted(os.listdir(tmp_dir))
+
+    for k in range(len(files)):
+        f = files[k]
+        shutil.move(os.path.join(tmp_dir, f), os.path.join(slides_dir, 'image' + str(k + start*framerate)) + '.png')
+    shutil.rmtree(tmp_dir)
+
 
 def create_video(input_dir, output, framerate=1):
     if os.path.exists(output): return
