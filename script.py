@@ -122,7 +122,7 @@ if __name__ == '__main__':
     print('duration', duration)
     create_slides(meeting_id, os.path.join(meeting_id, 'output-video', 'slides'), duration)
     create_video(os.path.join(meeting_id, 'output-video', 'slides'), os.path.join(meeting_id, 'output-video', 'video-slides.mp4'))
-    merge_audio_video(os.path.join(meeting_id, 'output-video', 'audio.mp3'), os.path.join(meeting_id, 'output-video', 'video-slides.mp4'), os.path.join(meeting_id, 'output-video', 'video.mp4'))
     extract_audio(os.path.join(meeting_id, 'video/webcams.webm'), os.path.join(meeting_id, 'output-video', 'audio.mp3'))
+    merge_audio_video(os.path.join(meeting_id, 'output-video', 'audio.mp3'), os.path.join(meeting_id, 'output-video', 'video-slides.mp4'), os.path.join(meeting_id, 'output-video', 'video.mp4'))
 
     
