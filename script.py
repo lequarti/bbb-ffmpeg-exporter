@@ -1,8 +1,11 @@
+#!/usr/bin/python3
+
 import sys
 import os
 import re
 import urllib.parse
 import urllib.request
+import urllib3
 import xml.etree.ElementTree as ET
 import shutil
 import subprocess
@@ -15,6 +18,9 @@ def download_file(base_url, path, output_dir):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     print(f"Downloading {url}...")
+    http = urllib3.PoolManager()
+    resp = http.request('HEAD', url)
+    if resp.status!=200: return
     with open(output_path, 'wb') as fp:
         buf = bytearray(64 * 1024)
         req = urllib.request.Request(url)
@@ -41,8 +47,7 @@ def download_file(base_url, path, output_dir):
             resp = urllib.request.urlopen(req)
     return output_path
 
-
-def download(url):        
+def download(url):
     m = re.match(r'^.*/playback/presentation/2\.0/playback.html\?meetingId=(\S+)$', url)
     if m is None:
         raise f"{url} is not a valid BBB playback URL"
@@ -65,7 +70,7 @@ def download(url):
     download_file(base_url, 'video/webcams.webm', meeting_id)
     download_file(base_url, 'deskshare/deskshare.webm', meeting_id)
     return meeting_id
-    
+
 def create_slides(input_dir, output_dir, duration, framerate=1):
     doc = ET.parse(os.path.join(input_dir, 'shapes.svg'))
     # if os.path.exists(output_dir):
@@ -108,7 +113,6 @@ def create_slides_from_deskshare(deskshare_filename, slides_dir, start, end, fra
         shutil.move(os.path.join(tmp_dir, f), os.path.join(slides_dir, 'image' + str(k + start*framerate)) + '.png')
     shutil.rmtree(tmp_dir)
 
-
 def create_video(input_dir, output, framerate=1):
     if os.path.exists(output): return
     command = f"ffmpeg -framerate {framerate} -start_number 0 -i '{input_dir}/image%1d.png' -c:v libx264 {output}"
@@ -134,7 +138,7 @@ def merge_audio_video(audio_filename, video_filename, output_video):
     subprocess.run(command, shell=True)
     
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) != 2:
         print('Usage: python3 script.py <bbb url>')
         sys.exit(1)
 
@@ -146,5 +150,3 @@ if __name__ == '__main__':
     create_video(os.path.join(meeting_id, 'output-video', 'slides'), os.path.join(meeting_id, 'output-video', 'video-slides.mp4'))
     extract_audio(os.path.join(meeting_id, 'video/webcams.webm'), os.path.join(meeting_id, 'output-video', 'audio.mp3'))
     merge_audio_video(os.path.join(meeting_id, 'output-video', 'audio.mp3'), os.path.join(meeting_id, 'output-video', 'video-slides.mp4'), os.path.join(meeting_id, 'output-video', 'video.mp4'))
-
-    
