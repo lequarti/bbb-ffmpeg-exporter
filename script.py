@@ -83,7 +83,7 @@ def download(url):
             output_file = os.path.join(meeting_id, 'video/webcams.mp4')
             command = f"ffmpeg.exe -i {input_file} -c:a aac -c:v libx264 -crf 0 \
             -preset ultrafast \
-            -v quiet -stats {output_file}"
+            -v warning -stats {output_file}"
             print(f'Executing... {command}')
             subprocess.run(command, shell=True)
 
@@ -93,7 +93,7 @@ def download(url):
             output_file = os.path.join(meeting_id, 'deskshare/deskshare.mp4')
             command = f"ffmpeg.exe -i {input_file} -c:a aac -c:v libx264 -crf 0 \
             -preset ultrafast \
-            -v quiet -stats {output_file}"
+            -v warning -stats {output_file}"
             print(f'Executing... {command}')
             subprocess.run(command, shell=True)
 
@@ -110,28 +110,30 @@ def create_slides(input_dir, output_dir, duration, framerate=1):
     #         else:
     #             os.remove(path)
     os.makedirs(output_dir, exist_ok=True)
+    duration = duration * framerate
     for img in doc.iterfind('./{http://www.w3.org/2000/svg}image'):
         path = img.get('{http://www.w3.org/1999/xlink}href')
         imageId = img.get('id')
+        startS = round(float(img.get('in')))
+        endS = round(float(img.get('out')))
+        startL = convert_secs_to_hms(startS)
+        endL = convert_secs_to_hms(endS)
+        start = startS * framerate
+        end = endS * framerate
         # If this is a "deskshare" slide, don't show anything
-        start = round(float(img.get('in')) * framerate)
-        end = round(float(img.get('out')) * framerate)
-        duration = round(duration * framerate)
         if path.endswith('/deskshare.png'):
-            print(f"Processing Deskshare {imageId}: {start} -> {end}")
+            print(f"Processing Deskshare {imageId}: {startL} -> {endL}")
             create_slides_from_deskshare(os.path.join(input_dir, 'deskshare/deskshare.mp4'),
                                          os.path.join(output_dir, f"{imageId}.mp4"), round(float(img.get('in'))),
                                          round(float(img.get('out'))))
             continue
-        print(f"Processing {imageId}: {start} -> {end}")
-
+        print(f"Processing {imageId}: {startL} -> {endL}")
         if start >= duration:
             continue
         end = min(end, ceil(duration))
         output_file = os.path.join(output_dir, f"{imageId}.mp4")
         if os.path.exists(output_file):
             continue
-
         tmp_dir = os.path.join(output_dir, 'tmp')
         if os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir)
@@ -151,7 +153,7 @@ def create_slides_from_deskshare(deskshare_file, output_file, start, end):
     command = f"ffmpeg -ss {start}s -i {deskshare_file} -t {delta}s \
     -vf scale=\"1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" \
     -preset ultrafast \
-    -v quiet -stats \
+    -v warning -stats \
     {output_file}"
     print(f'Executing... {command}')
     subprocess.run(command, shell=True)
@@ -160,12 +162,13 @@ def create_slides_from_deskshare(deskshare_file, output_file, start, end):
 def create_video(input_dir, start_number, output_file, framerate=1):
     if os.path.exists(output_file):
         return
-    command = f"ffmpeg -framerate {framerate} -start_number {start_number} -i '{input_dir}/image%1d.png' \
+    command = f"ffmpeg -framerate {framerate} -start_number {start_number} -i \"{input_dir}/image%1d.png\" \
     -c:v libx264 \
     -pix_fmt yuv420p \
     -vf scale=\"1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" \
+    -r 24 \
     -preset ultrafast \
-    -v quiet -stats \
+    -v warning -stats \
     {output_file}"
     print(f'Executing... {command}')
     subprocess.run(command, shell=True)
@@ -186,11 +189,11 @@ def concat_video(input_dir, output_file):
 
     with open(input_file, 'w', encoding='utf-8') as f_out:
         for k in range(len(files)):
-            f_out.write(f"file '../{files[k]}'\n")
+            f_out.write(f"file \"../{files[k]}\"\n")
 
     command = f"ffmpeg -f concat -safe 0 -i {input_file} -c copy \
     -preset ultrafast \
-    -v quiet -stats \
+    -v warning -stats \
     {output_file}"
     print(f'Executing... {command}')
 
@@ -203,7 +206,7 @@ def extract_audio(video_file, audio_file, duration):
         return
     command = f"ffmpeg -ss 0s -i {video_file} -t {duration}s -vn -c:a copy \
     -preset ultrafast \
-    -v quiet -stats \
+    -v warning -stats \
     {audio_file}"
     print(f"executing... {command}")
     subprocess.run(command, shell=True)
@@ -212,9 +215,9 @@ def extract_audio(video_file, audio_file, duration):
 def generate_overlay(webcams_file, overlay_file, duration):
     if os.path.exists(overlay_file):
         return
-    command = f"ffmpeg.exe -i {webcams_file} -t {duration}s -s 320x240 -an \
+    command = f"ffmpeg.exe -i {webcams_file} -t {duration}s -s 200x150 -an \
     -preset ultrafast \
-    -v quiet -stats \
+    -v warning -stats \
     {overlay_file}"
     print(f"executing... {command}")
     subprocess.run(command, shell=True)
@@ -226,7 +229,7 @@ def merge_audio_video(audio_file, video_file, output_file, duration):
     command = f"ffmpeg -i {audio_file} -i {video_file} -t {duration}s \
     -c:v copy -c:a aac \
     -preset ultrafast \
-    -v quiet -stats \
+    -v warning -stats \
     {output_file}"
     print(f"executing... {command}")
     subprocess.run(command, shell=True)
@@ -235,16 +238,17 @@ def merge_audio_video(audio_file, video_file, output_file, duration):
 def merge_video_audio_overlay(video_file, audio_file, overlay_file, output_video, duration):
     if os.path.exists(output_video):
         return
-    command = f"ffmpeg.exe -i {video_file} -i {audio_file} -i {overlay_file} -filter_complex 'overlay=1540:780' \
+    command = f"ffmpeg.exe -i {video_file} -i {audio_file} -i {overlay_file} -filter_complex \"overlay=1700:20\" \
     -t {duration}s \
     -preset ultrafast \
-    -v quiet -stats \
+    -v warning -stats \
     {output_video}"
     print(f"executing... {command}")
     subprocess.run(command, shell=True)
 
 
-def get_meeting_duration(metadata_file):
+def get_meeting_duration():
+    metadata_file = os.path.join(meeting_id, 'metadata.xml')
     if not os.path.exists(metadata_file):
         return
     doc = ET.parse(metadata_file)
@@ -254,7 +258,7 @@ def get_meeting_duration(metadata_file):
 def get_video_duration(video_file):
     if not os.path.exists(video_file):
         return
-    command = f"ffprobe -i {video_file} -show_format -v quiet -stats | grep duration | sed -n 's/duration=//p'"
+    command = f"ffprobe -i {video_file} -show_format -v warning -stats | grep duration | sed -n 's/duration=//p'"
     print(f"executing... {command}")
     result = subprocess.run(command, shell=True, capture_output=True)
     return float(result.stdout)
@@ -299,7 +303,7 @@ if __name__ == '__main__':
 
     url = sys.argv[1]
     meeting_id = download(url)
-    duration = get_meeting_duration(os.path.join(meeting_id, 'metadata.xml'))
+    duration = get_meeting_duration()
     durationL = convert_secs_to_hms(duration)
     framerate = get_video_framerate(os.path.join(meeting_id, 'video/webcams.mp4'))
 
@@ -309,7 +313,7 @@ if __name__ == '__main__':
     print('Processing, slides to images...')
     create_slides(meeting_id,
                   os.path.join(meeting_id, 'output-video', 'slides'),
-                  duration,
+                  round(duration),
                   framerate)
 
     print('Merging, slides into video...')
